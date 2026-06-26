@@ -30,8 +30,15 @@ export async function* askLoop(input: AskInput, conn: LlmConnection): AsyncGener
 		const queries = await rewrite(input, conn);
 		yield { type: 'status', phase: 'searching', queries };
 
-		// 2,3 — Search (parallel fan-out) + dedupe.
-		const lists = await Promise.all(queries.map((q) => search(q).catch(() => [] as SearchResult[])));
+		// 2,3 — Search (parallel fan-out) + dedupe. Log backend failures (don't swallow silently).
+		const lists = await Promise.all(
+			queries.map((q) =>
+				search(q).catch((e) => {
+					console.error(`[search] backend failed for "${q}":`, e instanceof Error ? e.message : e);
+					return [] as SearchResult[];
+				})
+			)
+		);
 		const links = dedupe(lists).slice(0, MAX_SOURCES);
 		yield { type: 'status', phase: 'reading', count: links.length };
 
@@ -130,8 +137,24 @@ async function deepQueries(
 }
 
 function buildPrompt(input: AskInput, pages: { text: string }[]) {
-	const sources = pages.map((p, i) => `[${i + 1}] ${p.text}`).join('\n\n');
 	const history = input.history?.length ? `Prior context:\n${input.history.join('\n')}\n\n` : '';
+
+	// No sources (search backend down / returned nothing): answer from knowledge,
+	// don't fabricate citations, and tell the user search came up empty.
+	if (pages.length === 0) {
+		return [
+			{
+				role: 'system' as const,
+				content:
+					'Web search returned no usable sources. Answer the question from your own knowledge. ' +
+					'Do NOT invent citations or [n] markers. Start by briefly noting that no web sources were available. ' +
+					'Be concise and well-structured (markdown).'
+			},
+			{ role: 'user' as const, content: `${history}Question: ${input.query}` }
+		];
+	}
+
+	const sources = pages.map((p, i) => `[${i + 1}] ${p.text}`).join('\n\n');
 	return [
 		{
 			role: 'system' as const,

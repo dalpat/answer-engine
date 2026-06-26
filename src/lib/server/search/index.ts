@@ -1,11 +1,14 @@
 /**
- * Search seam — pluggable backend. Default SearXNG (self-hosted metasearch);
- * set SEARCH_BACKEND=duckduckgo for a keyless, no-extra-service option.
+ * Search seam — pluggable backend via SEARCH_BACKEND:
+ *   'searxng'    (default) self-hosted metasearch — most complete, needs a running instance
+ *   'wikipedia'  keyless, reliable, no service — Wikipedia-only
+ *   'duckduckgo' keyless general web — may be rate-limited on some networks
  * Isolates the backend so swapping is config, not a rewrite. See docs/spec.html §03/§05.
  */
 import { env } from '$env/dynamic/private';
 import { searxngSearch } from './searxng';
 import { ddgSearch } from './duckduckgo';
+import { wikipediaSearch } from './wikipedia';
 
 export interface SearchResult {
 	url: string;
@@ -15,9 +18,14 @@ export interface SearchResult {
 
 /** Query the configured backend. Returns ranked links + snippets (no page content). */
 export function search(query: string): Promise<SearchResult[]> {
-	return (env.SEARCH_BACKEND ?? 'searxng') === 'duckduckgo'
-		? ddgSearch(query)
-		: searxngSearch(query);
+	switch (env.SEARCH_BACKEND) {
+		case 'wikipedia':
+			return wikipediaSearch(query);
+		case 'duckduckgo':
+			return ddgSearch(query);
+		default:
+			return searxngSearch(query);
+	}
 }
 
 /** Merge + dedupe results from parallel fan-out queries, preserving best rank. */
