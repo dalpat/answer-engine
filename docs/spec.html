@@ -163,8 +163,8 @@
         <tr><td class="choice">Conversation</td><td>Threaded follow-ups + related questions</td><td>Turns a search box into a research companion; cheap given persistence already exists.</td><td><span class="tag now">now</span></td></tr>
         <tr><td class="choice">BYOK config</td><td>Multiple named connections + composer switcher + auto model list</td><td>OpenAI-compatible means many backends (Ollama, vLLM, Groq…); switching is the point. Model list auto-loads via <code>/v1/models</code> — no typing IDs. Test-on-save.</td><td><span class="tag now">now</span></td></tr>
         <tr><td class="choice">Deploy</td><td>docker-compose: app + searxng · SQLite volume · local</td><td>One <code>docker compose up</code>; runs on your machine at localhost.</td><td><span class="tag now">now</span></td></tr>
-        <tr><td class="choice">Agentic "Deep" mode</td><td>Multi-step search/read/loop</td><td>Better for hard questions but multiplies latency/cost/failure modes — an opt-in toggle, not the default.</td><td><span class="tag later">later</span></td></tr>
-        <tr><td class="choice">Playwright fallback</td><td>Headless render for JS-heavy pages</td><td>Slot in behind <code>extract()</code> when readability yields too little text.</td><td><span class="tag later">later</span></td></tr>
+        <tr><td class="choice">Deep Research mode</td><td>Composer toggle → extra gap-filling search round</td><td>Shipped as a single extra round (opt-in). Full agentic multi-step loop remains deferred.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Playwright fallback</td><td>Headless render for JS-heavy pages</td><td>Shipped behind <code>extract()</code>, optional via <code>EXTRACT_BROWSER=1</code> + dynamic import (no hard dep).</td><td><span class="tag now">now</span></td></tr>
         <tr><td class="choice">Public hardening</td><td>TLS (Caddy), SSRF guard, rate limiting</td><td>Only matters with a public, static-IP host — explicitly deferred until that day.</td><td><span class="tag later">later</span></td></tr>
       </tbody>
     </table>
@@ -369,23 +369,24 @@ services:
     <h2><span class="num">12</span>MVP scope &amp; later</h2>
     <div class="scope">
       <div class="col card">
-        <h3>In the MVP</h3>
+        <h3>Built &amp; verified</h3>
         <ul class="check in">
           <li>Search → read → cited answer loop (rewrite + fan-out)</li>
           <li>Animated 4-phase live progress stepper</li>
           <li>Inline <span class="cite">n</span> citations + source cards</li>
-          <li>Threaded follow-ups + suggested related questions</li>
+          <li><b>Persistent threads</b> + multi-turn follow-ups in context</li>
           <li>Multi-user auth (own-code) + encrypted BYOK keys</li>
           <li>Multi-connection setup, auto model list, composer switcher</li>
-          <li>SQLite, docker-compose, localhost</li>
+          <li><b>Deep Research</b> toggle (extra gap-filling round)</li>
+          <li><b>Playwright fallback</b> (optional, behind <code>EXTRACT_BROWSER=1</code>)</li>
+          <li>Drizzle migrations auto-apply on boot; docker-compose</li>
         </ul>
       </div>
       <div class="col card">
-        <h3>Architected-for, deferred</h3>
+        <h3>Deferred by design</h3>
         <ul class="check out">
-          <li>Agentic "Deep Research" mode (branch in askLoop)</li>
-          <li>Playwright extraction fallback (behind extract())</li>
-          <li>Postgres (env swap)</li>
+          <li>Agentic multi-step Deep (current = single extra round)</li>
+          <li>True Postgres (pg-core fork; remote libSQL/Turso is a drop-in URL swap)</li>
           <li>OAuth social login</li>
           <li>Shareable answer links</li>
           <li>Public hardening: TLS, SSRF guard, rate limiting</li>
