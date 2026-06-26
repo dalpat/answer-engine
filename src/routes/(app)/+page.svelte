@@ -2,6 +2,7 @@
 	import { marked } from 'marked';
 	import type { AskEvent, Phase, SourceCard } from '$lib/events';
 	import { session, startThread } from '$lib/stores/session.svelte';
+	import { conns, loadConnections, setActive } from '$lib/stores/connections.svelte';
 	import Icon from '$lib/components/Icon.svelte';
 	import Menu from '$lib/components/Menu.svelte';
 
@@ -35,6 +36,11 @@
 			reset();
 			asked = '';
 		}
+	});
+
+	// Load the user's BYOK connections once.
+	$effect(() => {
+		if (!conns.loaded) loadConnections();
 	});
 
 	function reset() {
@@ -84,7 +90,11 @@
 			const res = await fetch('/api/ask', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ query: asked })
+				body: JSON.stringify({
+					query: asked,
+					connectionId: conns.active?.connectionId,
+					model: conns.active?.model
+				})
 			});
 			if (!res.body) throw new Error('no stream');
 			const reader = res.body.getReader();
@@ -126,18 +136,40 @@
 			rows="1"
 		></textarea>
 		<div class="tools">
-			<Menu width={210}>
+			<Menu width={230}>
 				{#snippet trigger(toggle)}
 					<button class="model" type="button" onclick={toggle}>
-						<span class="spark"><Icon name="sparkle" size={14} /></span> Default model
+						<span class="spark"><Icon name="sparkle" size={14} /></span>
+						{conns.active?.model ?? 'Demo mode'}
 						<span class="caret"><Icon name="chevron-down" size={14} /></span>
 					</button>
 				{/snippet}
 				{#snippet children(close)}
-					<div class="menu-note">No models configured</div>
+					{#if conns.list.length === 0}
+						<div class="menu-note">No models configured</div>
+					{:else}
+						{#each conns.list as c (c.id)}
+							{#if c.defaultModel}
+								<button
+									class="menu-item"
+									onclick={() => {
+										setActive({ connectionId: c.id, name: c.name, model: c.defaultModel! });
+										close();
+									}}
+								>
+									<Icon name="sparkle" size={14} />
+									<span class="model-opt">
+										<span class="mo-model">{c.defaultModel}</span>
+										<span class="mo-name">{c.name}</span>
+									</span>
+									{#if conns.active?.connectionId === c.id}<span class="mo-check">✓</span>{/if}
+								</button>
+							{/if}
+						{/each}
+					{/if}
 					<div class="menu-sep"></div>
 					<a class="menu-item" href="/settings" onclick={close}>
-						<Icon name="settings" size={15} /> Configure models
+						<Icon name="settings" size={15} /> Manage connections
 					</a>
 				{/snippet}
 			</Menu>
@@ -353,6 +385,26 @@
 		padding: 8px 11px 4px;
 		font-size: 12.5px;
 		color: var(--muted);
+	}
+	.model-opt {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		flex: 1;
+	}
+	.mo-model {
+		font-size: 13.5px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.mo-name {
+		font-size: 11.5px;
+		color: var(--muted);
+	}
+	.mo-check {
+		color: var(--accent);
+		font-weight: 700;
 	}
 	.send {
 		width: 38px;
