@@ -9,7 +9,9 @@ import type { RequestHandler } from './$types';
 import { demoAsk } from '$lib/server/ask';
 import { encodeEvent, type AskEvent } from '$lib/events';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals }) => {
+	if (!locals.user) return new Response('unauthorized', { status: 401 });
+
 	const { query } = (await request.json()) as { query?: string };
 	if (!query?.trim()) {
 		return new Response('query required', { status: 400 });

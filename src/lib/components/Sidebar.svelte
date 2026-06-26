@@ -7,6 +7,7 @@
 	import { session, selectThread, removeThread, newThread } from '$lib/stores/session.svelte';
 
 	const path = $derived(page.url.pathname);
+	const email = $derived((page.data.user?.email as string | undefined) ?? 'Account');
 
 	function onNew() {
 		newThread();
@@ -80,9 +81,9 @@
 	<div class="bottom">
 		<Menu align="right" width={210}>
 			{#snippet trigger(toggle)}
-				<button class="account" onclick={toggle}>
-					<span class="avatar"><Icon name="user" size={16} /></span>
-					<span class="label acct-name">Guest</span>
+				<button class="account" onclick={toggle} title={email}>
+					<span class="avatar">{email.charAt(0).toUpperCase()}</span>
+					<span class="label acct-name">{email}</span>
 					<span class="label"><Icon name="chevron-down" size={15} /></span>
 				</button>
 			{/snippet}
@@ -91,9 +92,11 @@
 					<Icon name="settings" size={15} /> Settings
 				</a>
 				<div class="menu-sep"></div>
-				<button class="menu-item" disabled>
-					<Icon name="logout" size={15} /> Sign out
-				</button>
+				<form method="POST" action="/logout">
+					<button class="menu-item danger" type="submit">
+						<Icon name="logout" size={15} /> Sign out
+					</button>
+				</form>
 			{/snippet}
 		</Menu>
 	</div>
@@ -277,10 +280,19 @@
 		display: grid;
 		place-items: center;
 		flex-shrink: 0;
+		font-size: 12px;
+		font-weight: 700;
 	}
 	.acct-name {
 		flex: 1;
+		min-width: 0;
 		text-align: left;
 		font-size: 14px;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bottom form {
+		margin: 0;
 	}
 </style>

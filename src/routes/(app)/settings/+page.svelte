@@ -1,5 +1,7 @@
 <script lang="ts">
 	import Icon from '$lib/components/Icon.svelte';
+	import { page } from '$app/state';
+	const email = $derived((page.data.user?.email as string | undefined) ?? '—');
 </script>
 
 <main class="page">
@@ -33,7 +35,7 @@
 		</div>
 		<div class="row">
 			<span class="row-label">Signed in as</span>
-			<span class="row-val">Guest <span class="tag">auth pending</span></span>
+			<span class="row-val">{email}</span>
 		</div>
 	</section>
 
@@ -116,13 +118,5 @@
 	}
 	.row-val {
 		font-size: 14px;
-	}
-	.tag {
-		font-size: 11px;
-		background: var(--active);
-		color: var(--accent);
-		border-radius: 6px;
-		padding: 2px 7px;
-		margin-left: 6px;
 	}
 </style>

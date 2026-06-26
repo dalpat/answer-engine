@@ -10,6 +10,7 @@ services:
       - SEARXNG_URL=http://searxng:8080
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - SESSION_SECRET=${SESSION_SECRET}
+      - ORIGIN=${ORIGIN:-http://localhost:3000} # must match the URL users hit (CSRF)
     volumes:
       - ./data:/data
     depends_on:
