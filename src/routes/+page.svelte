@@ -4,12 +4,13 @@
 
 	const PHASES: { key: Phase; label: string }[] = [
 		{ key: 'understanding', label: 'Understanding' },
-		{ key: 'searching', label: 'Searching' },
+		{ key: 'searching', label: 'Searching the web' },
 		{ key: 'reading', label: 'Reading sources' },
-		{ key: 'answering', label: 'Answering' }
+		{ key: 'answering', label: 'Writing answer' }
 	];
 
 	let query = $state('');
+	let asked = $state('');
 	let running = $state(false);
 	let phase = $state<Phase | null>(null);
 	let queries = $state<string[]>([]);
@@ -18,9 +19,12 @@
 	let related = $state<string[]>([]);
 	let elapsed = $state<number | null>(null);
 	let errorMsg = $state('');
+	let stepsOpen = $state(true);
 
 	let answerHtml = $derived(answer ? marked.parse(answer) : '');
 	let phaseIndex = $derived(phase ? PHASES.findIndex((p) => p.key === phase) : -1);
+	let started = $derived(running || phase !== null || answer !== '' || errorMsg !== '');
+	let done = $derived(elapsed !== null);
 
 	function reset() {
 		phase = null;
@@ -30,6 +34,7 @@
 		related = [];
 		elapsed = null;
 		errorMsg = '';
+		stepsOpen = true;
 	}
 
 	function apply(ev: AskEvent) {
@@ -49,6 +54,7 @@
 				break;
 			case 'done':
 				elapsed = ev.elapsedMs;
+				stepsOpen = false; // collapse the process once the answer is ready
 				break;
 			case 'error':
 				errorMsg = ev.message;
@@ -59,20 +65,22 @@
 	async function ask(q: string) {
 		if (!q.trim() || running) return;
 		reset();
+		asked = q.trim();
+		query = '';
 		running = true;
 		try {
 			const res = await fetch('/api/ask', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ query: q })
+				body: JSON.stringify({ query: asked })
 			});
 			if (!res.body) throw new Error('no stream');
 			const reader = res.body.getReader();
 			const decoder = new TextDecoder();
 			let buffer = '';
 			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
+				const { done: rdone, value } = await reader.read();
+				if (rdone) break;
 				buffer += decoder.decode(value, { stream: true });
 				const frames = buffer.split('\n\n');
 				buffer = frames.pop() ?? '';
@@ -89,159 +97,332 @@
 		}
 	}
 
-	function submit(e: SubmitEvent) {
-		e.preventDefault();
-		ask(query);
+	function onKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			ask(query);
+		}
 	}
 </script>
 
-<main>
-	<header>
-		<h1>Answer Engine</h1>
-		<p class="tagline">Search the web, read sources, get cited answers — on your own models.</p>
-	</header>
+{#snippet composer()}
+	<div class="composer">
+		<textarea
+			bind:value={query}
+			onkeydown={onKeydown}
+			placeholder="Ask anything…"
+			rows="1"
+		></textarea>
+		<div class="tools">
+			<button class="model" type="button" title="Model — configure in settings">
+				<span class="spark">✦</span> Default model
+				<span class="caret">▾</span>
+			</button>
+			<button class="send" onclick={() => ask(query)} disabled={running || !query.trim()} aria-label="Send">
+				↑
+			</button>
+		</div>
+	</div>
+{/snippet}
 
-	<form onsubmit={submit} class="composer">
-		<input bind:value={query} placeholder="Ask anything…" autocomplete="off" disabled={running} />
-		<button type="submit" disabled={running || !query.trim()}>
-			{running ? '…' : 'Ask'}
-		</button>
-	</form>
-
-	{#if errorMsg}
-		<div class="error">⚠ {errorMsg}</div>
-	{/if}
-
-	{#if phase !== null}
-		<section class="stepper">
-			{#each PHASES as p, i (p.key)}
-				<div class="step" class:done={phaseIndex > i} class:active={phaseIndex === i}>
-					<span class="dot">{phaseIndex > i ? '✓' : i + 1}</span>
-					<div class="cbody">
-						<div class="t">{p.label}</div>
-						{#if p.key === 'searching' && queries.length}
-							<div class="chips">
-								{#each queries as q (q)}<span class="chip">{q}</span>{/each}
-							</div>
-						{/if}
-						{#if p.key === 'reading' && sources.length}
-							<div class="cards">
-								{#each sources as s (s.n)}
-									<a class="srccard" href={s.url} target="_blank" rel="noreferrer">
-										<span class="fav"></span>{s.domain}
-									</a>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</div>
+{#if !started}
+	<!-- Empty state: centered greeting + card composer (Kimi-style) -->
+	<main class="home">
+		<div class="hero">
+			<div class="mark">✦</div>
+			<h1>What do you want to know?</h1>
+			<p class="sub">Searches the web, reads the sources, answers with citations.</p>
+		</div>
+		{@render composer()}
+		<div class="hints">
+			{#each ['Best mirrorless cameras in 2026', 'How does SearXNG work?', 'Explain AES-GCM simply'] as h (h)}
+				<button class="hint" onclick={() => ask(h)}>{h}</button>
 			{/each}
-		</section>
-	{/if}
+		</div>
+	</main>
+{:else}
+	<!-- Conversation state: thread scrolls, composer docks to the bottom -->
+	<div class="app">
+		<main class="thread">
+			<h2 class="question">{asked}</h2>
 
-	{#if answer}
-		<article class="answer">
+			{#if errorMsg}
+				<div class="error">⚠ {errorMsg}</div>
+			{/if}
+
+			{#if phase !== null}
+				<section class="process" class:collapsed={!stepsOpen}>
+					<button class="process-head" onclick={() => (stepsOpen = !stepsOpen)}>
+						<span class="ph-icon">{done ? '✓' : ''}</span>
+						<span class="ph-label">
+							{#if done}Searched {sources.length} sources · {(elapsed! / 1000).toFixed(1)}s
+							{:else}{PHASES[phaseIndex]?.label ?? 'Working'}…{/if}
+						</span>
+						<span class="ph-toggle">{stepsOpen ? '▾' : '▸'}</span>
+					</button>
+					{#if stepsOpen}
+						<ol class="steps">
+							{#each PHASES as p, i (p.key)}
+								<li class="step" class:done={phaseIndex > i || done} class:active={phaseIndex === i && !done}>
+									<span class="dot"></span>
+									<div class="cbody">
+										<span class="t">{p.label}</span>
+										{#if p.key === 'searching' && queries.length}
+											<div class="chips">
+												{#each queries as q (q)}<span class="chip">{q}</span>{/each}
+											</div>
+										{/if}
+										{#if p.key === 'reading' && sources.length}
+											<div class="cards">
+												{#each sources as s (s.n)}
+													<a class="srccard" href={s.url} target="_blank" rel="noreferrer">
+														<span class="fav"></span>{s.domain}
+													</a>
+												{/each}
+											</div>
+										{/if}
+									</div>
+								</li>
+							{/each}
+						</ol>
+					{/if}
+				</section>
+			{/if}
+
 			{#if sources.length}
 				<div class="sourcebar">
 					{#each sources as s (s.n)}
-						<a class="srccard" href={s.url} target="_blank" rel="noreferrer">
+						<a class="srccard cited" href={s.url} target="_blank" rel="noreferrer">
 							<span class="num">{s.n}</span><span class="fav"></span>{s.domain}
 						</a>
 					{/each}
 				</div>
 			{/if}
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-			<div class="prose">{@html answerHtml}</div>
-			{#if elapsed !== null}
-				<div class="meta">Searched {sources.length} sources · {(elapsed / 1000).toFixed(1)}s</div>
-			{/if}
-		</article>
-	{/if}
 
-	{#if related.length}
-		<section class="related">
-			<h3>Related</h3>
-			{#each related as r (r)}
-				<button class="relq" onclick={() => ((query = r), ask(r))}>{r}<span>→</span></button>
-			{/each}
-		</section>
-	{/if}
-</main>
+			{#if answer}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				<article class="prose">{@html answerHtml}</article>
+			{/if}
+
+			{#if related.length}
+				<section class="related">
+					<h3>Related</h3>
+					{#each related as r (r)}
+						<button class="relq" onclick={() => ask(r)}>{r}<span>↗</span></button>
+					{/each}
+				</section>
+			{/if}
+		</main>
+
+		<div class="dock">
+			{@render composer()}
+		</div>
+	</div>
+{/if}
 
 <style>
-	main {
-		max-width: 760px;
+	/* ---------- Empty / home state ---------- */
+	.home {
+		max-width: 720px;
 		margin: 0 auto;
-		padding: 56px 24px 96px;
+		min-height: 100dvh;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		padding: 24px;
+		gap: 26px;
 	}
-	header {
+	.hero {
 		text-align: center;
-		margin-bottom: 28px;
 	}
-	h1 {
-		font-size: 32px;
+	.mark {
+		font-size: 30px;
+		color: var(--accent);
+		margin-bottom: 10px;
+	}
+	.hero h1 {
+		font-size: 30px;
 		letter-spacing: -0.02em;
 		margin: 0;
+		font-weight: 650;
 	}
-	.tagline {
+	.hero .sub {
 		color: var(--muted);
-		margin: 6px 0 0;
+		margin: 8px 0 0;
+		font-size: 15px;
 	}
-	.composer {
+	.hints {
 		display: flex;
+		flex-wrap: wrap;
 		gap: 8px;
+		justify-content: center;
+	}
+	.hint {
 		background: var(--panel);
 		border: 1px solid var(--line);
+		color: var(--muted);
 		border-radius: 999px;
-		padding: 8px 8px 8px 20px;
-		box-shadow: var(--shadow);
-	}
-	.composer input {
-		flex: 1;
-		border: 0;
-		outline: 0;
-		font-size: 16px;
-		background: transparent;
-	}
-	.composer button {
-		border: 0;
-		background: var(--accent);
-		color: #fff;
-		font-weight: 600;
-		padding: 0 22px;
-		border-radius: 999px;
+		padding: 8px 14px;
+		font-size: 13.5px;
 		cursor: pointer;
+		transition: all 0.15s;
 	}
-	.composer button:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-	.error {
-		margin-top: 16px;
-		color: #b00020;
-		background: #fde8ec;
-		border-radius: 10px;
-		padding: 10px 14px;
+	.hint:hover {
+		color: var(--ink);
+		border-color: var(--line-strong);
 	}
 
-	.stepper {
-		position: relative;
-		margin: 28px 0 8px;
-		padding-left: 30px;
+	/* ---------- Composer card ---------- */
+	.composer {
+		background: var(--panel);
+		border: 1px solid var(--line);
+		border-radius: 24px;
+		padding: 14px 16px 12px;
+		box-shadow: var(--shadow-lg);
+		transition: border-color 0.15s;
 	}
-	.stepper::before {
+	.composer:focus-within {
+		border-color: var(--accent-line);
+	}
+	.composer textarea {
+		width: 100%;
+		border: 0;
+		outline: 0;
+		resize: none;
+		background: transparent;
+		font: inherit;
+		font-size: 16px;
+		line-height: 1.5;
+		max-height: 180px;
+		color: var(--ink);
+	}
+	.tools {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 8px;
+	}
+	.model {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		background: transparent;
+		border: 1px solid var(--line);
+		color: var(--muted);
+		border-radius: 999px;
+		padding: 6px 12px;
+		font-size: 13px;
+		cursor: pointer;
+	}
+	.model:hover {
+		color: var(--ink);
+	}
+	.model .spark {
+		color: var(--accent);
+	}
+	.model .caret {
+		font-size: 10px;
+		opacity: 0.7;
+	}
+	.send {
+		width: 38px;
+		height: 38px;
+		border: 0;
+		border-radius: 50%;
+		background: var(--ink);
+		color: #fff;
+		font-size: 18px;
+		cursor: pointer;
+		display: grid;
+		place-items: center;
+		transition: opacity 0.15s;
+	}
+	.send:disabled {
+		opacity: 0.25;
+		cursor: default;
+	}
+
+	/* ---------- Conversation layout ---------- */
+	.app {
+		max-width: 760px;
+		margin: 0 auto;
+		min-height: 100dvh;
+		display: flex;
+		flex-direction: column;
+	}
+	.thread {
+		flex: 1;
+		padding: 40px 24px 140px;
+	}
+	.question {
+		font-size: 24px;
+		letter-spacing: -0.01em;
+		font-weight: 650;
+		margin: 0 0 20px;
+	}
+	.dock {
+		position: sticky;
+		bottom: 0;
+		padding: 16px 24px 22px;
+		background: linear-gradient(to top, var(--bg) 70%, transparent);
+		max-width: 760px;
+		margin: 0 auto;
+		width: 100%;
+	}
+
+	/* ---------- Process / stepper (quiet) ---------- */
+	.process {
+		border: 1px solid var(--line);
+		border-radius: 16px;
+		background: var(--panel);
+		margin-bottom: 22px;
+		overflow: hidden;
+	}
+	.process-head {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		width: 100%;
+		background: transparent;
+		border: 0;
+		padding: 13px 16px;
+		font-size: 14px;
+		color: var(--ink);
+		cursor: pointer;
+	}
+	.ph-icon {
+		color: var(--green);
+		font-weight: 700;
+		width: 12px;
+	}
+	.ph-label {
+		flex: 1;
+		text-align: left;
+		color: var(--muted);
+	}
+	.ph-toggle {
+		color: var(--muted);
+		font-size: 11px;
+	}
+	.steps {
+		list-style: none;
+		margin: 0;
+		padding: 4px 16px 16px 18px;
+		position: relative;
+	}
+	.steps::before {
 		content: '';
 		position: absolute;
-		left: 9px;
-		top: 8px;
-		bottom: 8px;
-		width: 2px;
+		left: 23px;
+		top: 10px;
+		bottom: 18px;
+		width: 1.5px;
 		background: var(--line);
 	}
 	.step {
 		position: relative;
-		margin-bottom: 16px;
-		opacity: 0.55;
+		padding: 6px 0 6px 22px;
+		opacity: 0.5;
 		transition: opacity 0.3s;
 	}
 	.step.active,
@@ -250,116 +431,145 @@
 	}
 	.dot {
 		position: absolute;
-		left: -30px;
-		top: 0;
-		width: 20px;
-		height: 20px;
+		left: 0;
+		top: 11px;
+		width: 11px;
+		height: 11px;
 		border-radius: 50%;
 		background: var(--panel);
-		border: 2px solid var(--accent);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-size: 11px;
-		font-weight: 700;
-		color: var(--accent);
+		border: 2px solid var(--line-strong);
+	}
+	.step.active .dot {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 4px var(--accent-soft);
 	}
 	.step.done .dot {
 		background: var(--accent);
-		color: #fff;
+		border-color: var(--accent);
 	}
-	.t {
-		font-weight: 600;
+	.step .t {
+		font-size: 14px;
 	}
 	.chips,
 	.cards {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 6px;
-		margin-top: 6px;
+		margin-top: 7px;
 	}
 	.chip {
 		background: var(--accent-soft);
 		color: var(--accent);
-		border-radius: 8px;
-		padding: 4px 10px;
-		font-size: 13px;
+		border-radius: 7px;
+		padding: 3px 9px;
+		font-size: 12.5px;
 	}
+
+	/* ---------- Source cards ---------- */
 	.srccard {
 		display: inline-flex;
 		align-items: center;
 		gap: 7px;
 		background: var(--panel);
 		border: 1px solid var(--line);
-		border-radius: 8px;
-		padding: 6px 10px;
-		font-size: 13px;
-		color: var(--ink);
+		border-radius: 9px;
+		padding: 6px 11px;
+		font-size: 12.5px;
+		color: var(--muted);
 		text-decoration: none;
-		box-shadow: var(--shadow);
+		transition: border-color 0.15s;
+	}
+	.srccard:hover {
+		border-color: var(--line-strong);
+		color: var(--ink);
 	}
 	.fav {
-		width: 14px;
-		height: 14px;
+		width: 13px;
+		height: 13px;
 		border-radius: 3px;
 		background: var(--accent-soft);
 	}
-	.num {
+	.sourcebar {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 8px;
+		margin-bottom: 20px;
+	}
+	.cited .num {
 		display: inline-flex;
-		min-width: 16px;
-		height: 16px;
+		min-width: 15px;
+		height: 15px;
 		padding: 0 4px;
 		align-items: center;
 		justify-content: center;
 		background: var(--accent-soft);
 		color: var(--accent);
 		border-radius: 4px;
-		font-size: 11px;
+		font-size: 10.5px;
 		font-weight: 700;
 	}
 
-	.answer {
-		margin-top: 24px;
-	}
-	.sourcebar {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 8px;
-		margin-bottom: 16px;
+	/* ---------- Answer prose ---------- */
+	.prose {
+		font-size: 16px;
+		line-height: 1.7;
 	}
 	.prose :global(p:first-child) {
 		margin-top: 0;
 	}
-	.meta {
-		margin-top: 18px;
-		color: var(--muted);
-		font-size: 13px;
+	.prose :global(pre) {
+		background: var(--code-bg);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 14px;
+		overflow: auto;
+	}
+	.prose :global(code) {
+		background: var(--code-bg);
+		border-radius: 5px;
+		padding: 1px 5px;
+		font-size: 0.9em;
 	}
 
+	/* ---------- Related ---------- */
 	.related {
-		margin-top: 32px;
+		margin-top: 34px;
+		border-top: 1px solid var(--line);
+		padding-top: 18px;
 	}
 	.related h3 {
-		font-size: 14px;
+		font-size: 13px;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		letter-spacing: 0.06em;
 		color: var(--muted);
+		margin: 0 0 10px;
 	}
 	.relq {
 		display: flex;
 		justify-content: space-between;
+		align-items: center;
 		width: 100%;
 		text-align: left;
-		background: var(--panel);
-		border: 1px solid var(--line);
-		border-radius: 10px;
-		padding: 12px 16px;
-		margin-bottom: 8px;
-		font-size: 15px;
+		background: transparent;
+		border: 0;
+		border-bottom: 1px solid var(--line);
+		padding: 13px 2px;
+		font-size: 15.5px;
+		color: var(--ink);
 		cursor: pointer;
-		box-shadow: var(--shadow);
+	}
+	.relq:hover {
+		color: var(--accent);
 	}
 	.relq span {
 		color: var(--muted);
+	}
+
+	.error {
+		color: #b00020;
+		background: #fdecef;
+		border-radius: 12px;
+		padding: 12px 16px;
+		margin-bottom: 18px;
 	}
 </style>
