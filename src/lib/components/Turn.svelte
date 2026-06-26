@@ -12,7 +12,21 @@
 		{ key: 'answering', label: 'Writing answer' }
 	];
 
-	const answerHtml = $derived(turn.answer ? marked.parse(turn.answer) : '');
+	// While streaming, re-parsing the full markdown on every token is O(n²) and
+	// saturates the main thread. Throttle to one parse per animation frame; once
+	// the turn is done, parse the final answer directly (also correct for SSR).
+	let liveHtml = $state('');
+	$effect(() => {
+		if (!turn.running) return;
+		const text = turn.answer;
+		const id = requestAnimationFrame(() => {
+			liveHtml = text ? (marked.parse(text) as string) : '';
+		});
+		return () => cancelAnimationFrame(id);
+	});
+	const answerHtml = $derived(
+		turn.running ? liveHtml : turn.answer ? (marked.parse(turn.answer) as string) : ''
+	);
 	const phaseIndex = $derived(turn.phase ? PHASES.findIndex((p) => p.key === turn.phase) : -1);
 	const done = $derived(turn.elapsed !== null);
 </script>

@@ -40,14 +40,18 @@ export async function testConnection(baseUrl: string, apiKey: string): Promise<b
 }
 
 /** Non-streaming completion — used for the cheap rewrite + related-questions calls. */
-export async function complete(conn: LlmConnection, messages: ChatMessage[]): Promise<string> {
+export async function complete(
+	conn: LlmConnection,
+	messages: ChatMessage[],
+	maxTokens = 200
+): Promise<string> {
 	const res = await fetch(`${base(conn.baseUrl)}/v1/chat/completions`, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${conn.apiKey}`
 		},
-		body: JSON.stringify({ model: conn.model, messages, temperature: 0 })
+		body: JSON.stringify({ model: conn.model, messages, temperature: 0, max_tokens: maxTokens })
 	});
 	if (!res.ok) throw new Error(`complete ${res.status}`);
 	const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -58,7 +62,7 @@ export async function complete(conn: LlmConnection, messages: ChatMessage[]): Pr
 export async function* streamChat(
 	conn: LlmConnection,
 	messages: ChatMessage[],
-	opts: { temperature?: number } = {}
+	opts: { temperature?: number; maxTokens?: number } = {}
 ): AsyncGenerator<string> {
 	const res = await fetch(`${base(conn.baseUrl)}/v1/chat/completions`, {
 		method: 'POST',
@@ -70,6 +74,7 @@ export async function* streamChat(
 			model: conn.model,
 			messages,
 			temperature: opts.temperature ?? 0.3,
+			max_tokens: opts.maxTokens ?? 2048, // bound runaway generation on weak models
 			stream: true
 		})
 	});
