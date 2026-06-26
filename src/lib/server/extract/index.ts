@@ -81,9 +81,28 @@ function readability(html: string): string {
 		.replace(/<header[\s\S]*?<\/header>/gi, ' ')
 		.replace(/<footer[\s\S]*?<\/footer>/gi, ' ');
 	const main = stripped.match(/<(?:article|main)[\s\S]*?<\/(?:article|main)>/i)?.[0] ?? stripped;
-	return main
-		.replace(/<[^>]+>/g, ' ')
-		.replace(/&nbsp;/g, ' ')
+	return decodeEntities(main.replace(/<[^>]+>/g, ' '))
 		.replace(/\s+/g, ' ')
 		.trim();
+}
+
+/** Decode HTML entities so numeric/named refs don't leak into the LLM context. */
+function decodeEntities(s: string): string {
+	return s
+		.replace(/&#(\d+);/g, (_, n) => safeCp(parseInt(n, 10)))
+		.replace(/&#x([0-9a-f]+);/gi, (_, h) => safeCp(parseInt(h, 16)))
+		.replace(/&nbsp;/g, ' ')
+		.replace(/&amp;/g, '&')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&(?:apos|#39);/g, "'");
+}
+
+function safeCp(n: number): string {
+	try {
+		return String.fromCodePoint(n);
+	} catch {
+		return ' ';
+	}
 }
