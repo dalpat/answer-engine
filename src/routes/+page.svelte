@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { marked } from 'marked';
 	import type { AskEvent, Phase, SourceCard } from '$lib/events';
+	import { session, startThread } from '$lib/stores/session.svelte';
+	import Icon from '$lib/components/Icon.svelte';
+	import Menu from '$lib/components/Menu.svelte';
 
 	const PHASES: { key: Phase; label: string }[] = [
 		{ key: 'understanding', label: 'Understanding' },
@@ -25,6 +28,14 @@
 	let phaseIndex = $derived(phase ? PHASES.findIndex((p) => p.key === phase) : -1);
 	let started = $derived(running || phase !== null || answer !== '' || errorMsg !== '');
 	let done = $derived(elapsed !== null);
+
+	// "New thread" / selecting from the sidebar clears activeId → reset the view.
+	$effect(() => {
+		if (session.activeId === null && started) {
+			reset();
+			asked = '';
+		}
+	});
 
 	function reset() {
 		phase = null;
@@ -67,6 +78,7 @@
 		reset();
 		asked = q.trim();
 		query = '';
+		startThread(asked);
 		running = true;
 		try {
 			const res = await fetch('/api/ask', {
@@ -114,12 +126,23 @@
 			rows="1"
 		></textarea>
 		<div class="tools">
-			<button class="model" type="button" title="Model — configure in settings">
-				<span class="spark">✦</span> Default model
-				<span class="caret">▾</span>
-			</button>
+			<Menu width={210}>
+				{#snippet trigger(toggle)}
+					<button class="model" type="button" onclick={toggle}>
+						<span class="spark"><Icon name="sparkle" size={14} /></span> Default model
+						<span class="caret"><Icon name="chevron-down" size={14} /></span>
+					</button>
+				{/snippet}
+				{#snippet children(close)}
+					<div class="menu-note">No models configured</div>
+					<div class="menu-sep"></div>
+					<a class="menu-item" href="/settings" onclick={close}>
+						<Icon name="settings" size={15} /> Configure models
+					</a>
+				{/snippet}
+			</Menu>
 			<button class="send" onclick={() => ask(query)} disabled={running || !query.trim()} aria-label="Send">
-				↑
+				<Icon name="arrow-up" size={18} />
 			</button>
 		</div>
 	</div>
@@ -225,7 +248,7 @@
 	.home {
 		max-width: 720px;
 		margin: 0 auto;
-		min-height: 100dvh;
+		min-height: 100%;
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
@@ -316,13 +339,20 @@
 	}
 	.model:hover {
 		color: var(--ink);
+		border-color: var(--line-strong);
 	}
 	.model .spark {
 		color: var(--accent);
+		display: inline-flex;
 	}
 	.model .caret {
-		font-size: 10px;
+		display: inline-flex;
 		opacity: 0.7;
+	}
+	.menu-note {
+		padding: 8px 11px 4px;
+		font-size: 12.5px;
+		color: var(--muted);
 	}
 	.send {
 		width: 38px;
@@ -346,7 +376,7 @@
 	.app {
 		max-width: 760px;
 		margin: 0 auto;
-		min-height: 100dvh;
+		min-height: 100%;
 		display: flex;
 		flex-direction: column;
 	}
