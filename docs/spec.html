@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Answer Engine — Product & Architecture Spec</title>
+<style>
+  :root{
+    --bg:#fafafa; --panel:#ffffff; --ink:#1a1a1a; --muted:#6b6b6b;
+    --line:#e8e8e8; --accent:#4f46e5; --accent-soft:#eef0ff;
+    --green:#0f9d58; --green-soft:#e9f7ee; --amber:#b8860b; --amber-soft:#fbf3e0;
+    --code-bg:#f4f4f6; --radius:14px; --shadow:0 1px 3px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.04);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:48px 24px 96px}
+  header.hero{margin-bottom:40px}
+  .eyebrow{font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent); font-weight:700}
+  h1{font-size:40px; line-height:1.15; margin:8px 0 12px; letter-spacing:-.02em}
+  .lede{font-size:18px; color:var(--muted); max-width:640px}
+  .meta-row{display:flex; gap:10px; flex-wrap:wrap; margin-top:20px}
+  .pill{background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-size:13px; color:var(--muted); box-shadow:var(--shadow)}
+  .pill b{color:var(--ink)}
+  h2{font-size:24px; margin:48px 0 4px; letter-spacing:-.01em}
+  h2 .num{color:var(--accent); font-weight:700; margin-right:10px}
+  h3{font-size:17px; margin:28px 0 8px}
+  .sub{color:var(--muted); margin:0 0 18px}
+  section{scroll-margin-top:24px}
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px 24px; box-shadow:var(--shadow); margin:16px 0}
+  p{margin:10px 0}
+  code{background:var(--code-bg); border-radius:6px; padding:2px 6px; font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:13.5px}
+  pre{background:var(--code-bg); border:1px solid var(--line); border-radius:10px; padding:16px; overflow:auto; font-size:13px; line-height:1.55}
+  pre code{background:none; padding:0}
+  ul{margin:10px 0; padding-left:22px}
+  li{margin:6px 0}
+  a{color:var(--accent); text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  /* nav */
+  nav.toc{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 22px; box-shadow:var(--shadow); margin:24px 0 8px}
+  nav.toc ol{margin:0; padding-left:20px; columns:2; column-gap:32px}
+  nav.toc li{margin:4px 0}
+
+  /* decision table */
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:14.5px}
+  th,td{text-align:left; padding:11px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted)}
+  td.choice{font-weight:600}
+  .tag{display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px}
+  .tag.now{background:var(--green-soft); color:var(--green)}
+  .tag.later{background:var(--amber-soft); color:var(--amber)}
+
+  /* reasoning blocks */
+  .why{border-left:3px solid var(--accent); background:var(--accent-soft); border-radius:0 10px 10px 0; padding:12px 16px; margin:12px 0; font-size:14.5px}
+  .why b{color:var(--accent)}
+
+  /* pipeline */
+  .flow{display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:18px 0}
+  .node{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 14px; font-size:13.5px; font-weight:600; box-shadow:var(--shadow)}
+  .node small{display:block; font-weight:400; color:var(--muted); font-size:12px}
+  .arrow{color:var(--muted); font-size:18px}
+
+  /* stepper mock */
+  .stepper{position:relative; padding-left:30px; margin:16px 0}
+  .stepper::before{content:""; position:absolute; left:9px; top:6px; bottom:6px; width:2px; background:var(--line)}
+  .step{position:relative; margin:0 0 18px; padding:2px 0}
+  .step .dot{position:absolute; left:-30px; top:2px; width:20px; height:20px; border-radius:50%; background:var(--panel); border:2px solid var(--accent); display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--accent); font-weight:700}
+  .step.done .dot{background:var(--accent); color:#fff}
+  .step .t{font-weight:600}
+  .step .d{color:var(--muted); font-size:14px}
+  .srccard{display:inline-flex; align-items:center; gap:7px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px 10px; font-size:12.5px; margin:6px 6px 0 0; box-shadow:var(--shadow)}
+  .fav{width:14px; height:14px; border-radius:3px; background:var(--accent-soft); display:inline-block}
+  .cite{display:inline-flex; min-width:18px; height:18px; padding:0 5px; align-items:center; justify-content:center; background:var(--accent-soft); color:var(--accent); border-radius:5px; font-size:11px; font-weight:700; vertical-align:middle}
+
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:680px){.two{grid-template-columns:1fr} nav.toc ol{columns:1}}
+
+  .scope{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  .scope .col h3{margin-top:0}
+  .check li{list-style:none; position:relative; padding-left:26px}
+  .check li::before{position:absolute; left:0; top:0; font-weight:700}
+  .check.in li::before{content:"✓"; color:var(--green)}
+  .check.out li::before{content:"→"; color:var(--amber)}
+  @media(max-width:680px){.scope{grid-template-columns:1fr}}
+
+  footer{margin-top:60px; padding-top:24px; border-top:1px solid var(--line); color:var(--muted); font-size:13px; text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div class="eyebrow">Product &amp; Architecture Spec</div>
+    <h1>Answer Engine</h1>
+    <p class="lede">A self-hosted, Perplexity-style answer engine on your own OpenAI-compatible models. Search the web, read sources, synthesize cited answers — multi-user and launch-ready.</p>
+    <div class="meta-row">
+      <span class="pill"><b>Type</b> · Search-augmented answer engine</span>
+      <span class="pill"><b>Stack</b> · SvelteKit 5</span>
+      <span class="pill"><b>Model</b> · BYOK / OpenAI-compatible</span>
+      <span class="pill"><b>Hosting</b> · Self-hosted, local</span>
+      <span class="pill"><b>Date</b> · 2026-06-26</span>
+    </div>
+  </header>
+
+  <nav class="toc">
+    <ol>
+      <li><a href="#vision">Vision &amp; guiding principles</a></li>
+      <li><a href="#decisions">Decision log</a></li>
+      <li><a href="#arch">Architecture</a></li>
+      <li><a href="#pipeline">The ask pipeline</a></li>
+      <li><a href="#loop">Search loop intelligence</a></li>
+      <li><a href="#progress">Live progress UX</a></li>
+      <li><a href="#citations">Citations &amp; answer rendering</a></li>
+      <li><a href="#byok">BYOK model configuration</a></li>
+      <li><a href="#auth">Auth &amp; security</a></li>
+      <li><a href="#data">Data model</a></li>
+      <li><a href="#deploy">Packaging &amp; deploy</a></li>
+      <li><a href="#scope">MVP scope &amp; later</a></li>
+    </ol>
+  </nav>
+
+  <!-- VISION -->
+  <section id="vision">
+    <h2><span class="num">01</span>Vision &amp; guiding principles</h2>
+    <p class="sub">What we're building and the rules that settle every downstream choice.</p>
+    <div class="card">
+      <p>An <b>answer engine</b>, not a chatbot. Every query runs the loop <b>search → read → synthesize with inline citations</b>. Plain chat is simply the mode where the search step is skipped, so it comes for free. The product feels like a research companion: ask, get a cited answer, ask a follow-up in context, explore suggested questions.</p>
+      <h3>Guiding principles</h3>
+      <ul>
+        <li><b>Self-hosted by default.</b> No external service unless there is genuinely no alternative. No SaaS platform lock-in (this is why we rejected Next.js/Vercel and hosted auth/search).</li>
+        <li><b>Own the code.</b> Prefer code that lives in our repo over black-box dependencies — especially for auth.</li>
+        <li><b>Pleasant &amp; maintainable.</b> Code should read well any day, any time. This is a stated, weighted value — it decided the framework.</li>
+        <li><b>Launch-ready, not enterprise-bloated.</b> A hobby project that's polished and shippable — but we skip security/ops theater that only matters for a public, static-IP deployment we don't have.</li>
+        <li><b>BYOK.</b> Users bring their own OpenAI-compatible endpoints and keys; we stay provider-agnostic.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- DECISIONS -->
+  <section id="decisions">
+    <h2><span class="num">02</span>Decision log</h2>
+    <p class="sub">Every fork we walked, the choice, and why. <span class="tag now">now</span> ships in the MVP; <span class="tag later">later</span> is architected-for but deferred.</p>
+    <div class="card" style="padding:8px 14px">
+    <table>
+      <thead><tr><th style="width:22%">Decision</th><th style="width:30%">Choice</th><th>Why</th><th style="width:64px"></th></tr></thead>
+      <tbody>
+        <tr><td class="choice">Product identity</td><td>Answer engine; chat is a sub-mode</td><td>The search→cite→synthesize loop is the differentiator; chat-only would be a ChatGPT clone.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Search source</td><td>Self-hosted SearXNG</td><td>No API key, no external dependency. Metasearch returns links + snippets.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Content extraction</td><td>Readability-first behind <code>extract(url)</code></td><td>Most informational pages are server-rendered articles; a readability extractor handles ~90% with no browser. Playwright fallback is a drop-in later.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Framework</td><td>SvelteKit (Svelte 5) + adapter-node</td><td>Streaming is the signature UX and it's native here; Svelte 5 runes are the least-ceremony, most readable code; adapter-node = plain self-hosted container, no Vercel trap.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">User model</td><td>Multi-user, launch-ready</td><td>BYOK only means something with more than one user; built to be shipped.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Auth</td><td>Own-your-code (Lucia pattern)</td><td>~150 lines of vetted-primitive session code in our repo — the Breeze/Fortify analog. Consistent with "own the stack."</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Database</td><td>Drizzle ORM · SQLite→Postgres via <code>.env</code></td><td>Swappable like Laravel; SQLite to launch with zero setup, Postgres by changing a driver + URL. Drizzle is the most pleasant, SQL-shaped TS data layer.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Key storage</td><td>AES-GCM encrypted at rest</td><td>We hold other people's LLM keys — encryption is table stakes, not enterprise theater. One <code>ENCRYPTION_KEY</code> env.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Search loop</td><td>Rewrite + parallel fan-out + single synthesis</td><td>The Perplexity baseline feel. One cheap rewrite call massively lifts relevance vs. raw single-shot; predictable and debuggable.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Citations</td><td>Inline <span class="cite">n</span> + source cards</td><td>The trust signal that separates an answer engine from a chatbot; lets readers verify each claim.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Live progress</td><td>Animated 4-phase stepper over a typed event stream</td><td>Makes a 5–10s wait feel alive and premium instead of stuck. Drives the whole frontend as a reducer over events.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Conversation</td><td>Threaded follow-ups + related questions</td><td>Turns a search box into a research companion; cheap given persistence already exists.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">BYOK config</td><td>Multiple named connections + composer switcher + auto model list</td><td>OpenAI-compatible means many backends (Ollama, vLLM, Groq…); switching is the point. Model list auto-loads via <code>/v1/models</code> — no typing IDs. Test-on-save.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Deploy</td><td>docker-compose: app + searxng · SQLite volume · local</td><td>One <code>docker compose up</code>; runs on your machine at localhost.</td><td><span class="tag now">now</span></td></tr>
+        <tr><td class="choice">Agentic "Deep" mode</td><td>Multi-step search/read/loop</td><td>Better for hard questions but multiplies latency/cost/failure modes — an opt-in toggle, not the default.</td><td><span class="tag later">later</span></td></tr>
+        <tr><td class="choice">Playwright fallback</td><td>Headless render for JS-heavy pages</td><td>Slot in behind <code>extract()</code> when readability yields too little text.</td><td><span class="tag later">later</span></td></tr>
+        <tr><td class="choice">Public hardening</td><td>TLS (Caddy), SSRF guard, rate limiting</td><td>Only matters with a public, static-IP host — explicitly deferred until that day.</td><td><span class="tag later">later</span></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <!-- ARCHITECTURE -->
+  <section id="arch">
+    <h2><span class="num">03</span>Architecture</h2>
+    <p class="sub">One SvelteKit app, one search container, one file-based DB to start.</p>
+    <div class="card">
+      <div class="flow">
+        <div class="node">Browser (Svelte 5 SPA)<small>composer · stepper · answer view</small></div>
+        <span class="arrow">⇄</span>
+        <div class="node">SvelteKit server<small>adapter-node · +server.ts endpoints · SSE</small></div>
+        <span class="arrow">→</span>
+        <div class="node">SearXNG<small>self-hosted metasearch</small></div>
+      </div>
+      <div class="flow">
+        <div class="node">SvelteKit server</div>
+        <span class="arrow">→</span>
+        <div class="node">extract(url)<small>readability now · Playwright later</small></div>
+        <span class="arrow">→</span>
+        <div class="node">BYOK LLM<small>user's OpenAI-compatible endpoint</small></div>
+        <span class="arrow">→</span>
+        <div class="node">Drizzle / SQLite<small>users · connections · threads · messages</small></div>
+      </div>
+      <h3>Key seams (so later choices are config, not rewrites)</h3>
+      <ul>
+        <li><code>search(query)</code> → today SearXNG; isolates the metasearch backend.</li>
+        <li><code>extract(url)</code> → today readability; Playwright fallback drops in here.</li>
+        <li><code>askLoop()</code> → today rewrite+fan-out+synthesis; "Deep" mode is a branch here.</li>
+        <li>Typed SSE event bus → the frontend is a pure reducer over <code>status · sources · token · done</code> events.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- PIPELINE -->
+  <section id="pipeline">
+    <h2><span class="num">04</span>The ask pipeline</h2>
+    <p class="sub">What happens between hitting Enter and the first token.</p>
+    <div class="card">
+      <div class="flow">
+        <div class="node">1 · Rewrite<small>LLM → 1–3 search queries</small></div><span class="arrow">→</span>
+        <div class="node">2 · Search<small>SearXNG, parallel</small></div><span class="arrow">→</span>
+        <div class="node">3 · Dedupe<small>merge + rank links</small></div><span class="arrow">→</span>
+        <div class="node">4 · Extract<small>concurrent fetch (5–10)</small></div><span class="arrow">→</span>
+        <div class="node">5 · Synthesize<small>stream cited answer</small></div><span class="arrow">→</span>
+        <div class="node">6 · Related<small>suggest follow-ups</small></div>
+      </div>
+      <p>The whole pipeline reads top-to-bottom in one <code>+server.ts</code> file — the concurrent fan-out is a <code>Promise.all</code>, and the endpoint <i>returns the stream</i>.</p>
+<pre><code>// src/routes/api/ask/+server.ts  (shape)
+export async function POST({ request, locals }) {
+  const { query, threadId, connectionId } = await request.json();
+  return streamSSE(async (emit) =&gt; {
+    emit('status', { phase: 'understanding' });
+    const queries = await rewrite(query);            // 1
+    emit('status', { phase: 'searching', queries });
+    const links = dedupe(await Promise.all(queries.map(searxng))); // 2,3
+    emit('status', { phase: 'reading' });
+    const pages = await Promise.all(links.map(extract));          // 4
+    emit('sources', pages.map(toCard));
+    emit('status', { phase: 'answering' });
+    for await (const tok of synthesize(query, pages, llmFor(connectionId)))
+      emit('token', tok);                                          // 5
+    emit('related', await relatedQuestions(query));                // 6
+    emit('done');
+  });
+}</code></pre>
+    </div>
+  </section>
+
+  <!-- LOOP -->
+  <section id="loop">
+    <h2><span class="num">05</span>Search loop intelligence</h2>
+    <p class="sub">Smart enough to fix vague questions; simple enough to debug.</p>
+    <div class="card">
+      <p><b>Now — rewrite + fan-out + single synthesis.</b> The LLM turns the user's (possibly vague or conversational) question into 1–3 targeted search queries, run in parallel against SearXNG. Results are deduped and ranked, top 5–10 extracted, then a single synthesis pass produces the cited answer.</p>
+      <div class="why"><b>Why not single-shot:</b> it feels broken the instant someone types a vague question. The rewrite is one cheap call that massively lifts relevance, and parallel fan-out costs no extra wall-clock.</div>
+      <div class="why"><b>Why not agentic now:</b> a search/read/loop is better for hard questions but multiplies latency, token cost, and failure modes (wandering loops, no clean termination). It's the wrong <i>default</i> — perfect as a later "Deep Research" toggle, added as a branch in <code>askLoop()</code>.</div>
+      <h3>Follow-up context</h3>
+      <p>On a follow-up, we feed back <b>prior Q&amp;A summaries</b>, not full source text — keeps the thread coherent while bounding token cost.</p>
+    </div>
+  </section>
+
+  <!-- PROGRESS -->
+  <section id="progress">
+    <h2><span class="num">06</span>Live progress UX</h2>
+    <p class="sub">A first-class feature — beautiful and intuitive, never a bare spinner. It's what makes the wait feel premium.</p>
+    <div class="card">
+      <p>An animated vertical stepper that tells a story, driven entirely by the typed event stream. Smooth height/opacity transitions between phases; collapses to a one-line summary on completion (re-expandable).</p>
+      <div class="stepper">
+        <div class="step done"><div class="dot">✓</div><div class="t">Understanding</div><div class="d">Shows the rewritten queries as they generate — proves the engine "got it".
+          <div><span class="srccard"><span class="fav"></span>“best mirrorless cameras 2026”</span><span class="srccard"><span class="fav"></span>“mirrorless low light comparison”</span></div></div></div>
+        <div class="step done"><div class="dot">✓</div><div class="t">Searching</div><div class="d">Query chips light up; result count ticks in.</div></div>
+        <div class="step done"><div class="dot">✓</div><div class="t">Reading sources</div><div class="d">Source cards stream in one by one, each animating <i>extracting…</i> → <i>done</i>. The visually richest moment.
+          <div><span class="srccard"><span class="fav"></span>dpreview.com · Best mirrorless</span><span class="srccard"><span class="fav"></span>theverge.com · 2026 picks</span><span class="srccard"><span class="fav"></span>wirecutter.com · Cameras</span></div></div></div>
+        <div class="step"><div class="dot">4</div><div class="t">Answering</div><div class="d">Stepper collapses to a summary bar, source cards dock to the top, tokens stream in with <span class="cite">n</span> chips inline.</div></div>
+      </div>
+      <p style="color:var(--muted); font-size:14px">Collapsed state after completion: <span class="srccard"><span class="fav"></span><b>Searched 6 sources · 2.3s</b> ⌄</span></p>
+      <div class="why"><b>Architectural consequence:</b> the stream is a <i>typed event stream</i>, not raw text — <code>status · sources · token · related · done</code>. The frontend is a clean reducer over these events.</div>
+    </div>
+  </section>
+
+  <!-- CITATIONS -->
+  <section id="citations">
+    <h2><span class="num">07</span>Citations &amp; answer rendering</h2>
+    <div class="card">
+      <p>Sources are numbered in the synthesis prompt; the model is instructed to cite <span class="cite">n</span>. Each marker renders as a clickable chip that scrolls to / highlights its source card.</p>
+      <p style="background:var(--code-bg); border-radius:10px; padding:14px 16px">The Sony A7 IV leads in low light <span class="cite">1</span>, while the Fuji X-T5 wins on color science <span class="cite">2</span> and portability <span class="cite">3</span>.</p>
+      <ul>
+        <li><b>Source cards:</b> favicon + domain + title, docked above the answer.</li>
+        <li><b>Rendering:</b> markdown with code blocks, tables, and lists.</li>
+        <li><b>Honest caveat:</b> models occasionally mis-cite. Acceptable and prompt-improvable; the trust value far outweighs the imperfection.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- BYOK -->
+  <section id="byok">
+    <h2><span class="num">08</span>BYOK model configuration</h2>
+    <p class="sub">The "our own OpenAI-compatible model" core. Multiple backends, one-tap switching, no friction.</p>
+    <div class="two">
+      <div class="card">
+        <h3>Connections</h3>
+        <p>Users add named <b>connections</b>, each with a base URL + key + auto-loaded model list:</p>
+        <ul>
+          <li><span class="srccard"><span class="fav"></span><b>local vLLM</b> · http://localhost:8000</span></li>
+          <li><span class="srccard"><span class="fav"></span><b>Groq</b> · api.groq.com</span></li>
+          <li><span class="srccard"><span class="fav"></span><b>Together</b> · api.together.xyz</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Frictionless setup</h3>
+        <ul>
+          <li><b>Auto model list</b> via <code>GET /v1/models</code> → dropdown. No typing IDs.</li>
+          <li><b>Fallback:</b> manual entry only if an endpoint lacks <code>/models</code>.</li>
+          <li><b>Test-on-save:</b> one cheap call → instant <span style="color:var(--green)">✓ works</span> instead of a cryptic mid-query failure.</li>
+          <li><b>Composer switcher:</b> pick the active model per thread, inline.</li>
+        </ul>
+      </div>
+    </div>
+    <p style="color:var(--muted); font-size:14px">Launch keeps tuning minimal — temperature only. Per-model parameter UIs are later polish.</p>
+  </section>
+
+  <!-- AUTH -->
+  <section id="auth">
+    <h2><span class="num">09</span>Auth &amp; security</h2>
+    <div class="card">
+      <h3>Own-your-code auth (Lucia pattern)</h3>
+      <p>Not hand-rolled crypto and not a black-box package — the Breeze/Fortify analog for SvelteKit: ~150 lines of session/cookie code in <code>src/lib/server/auth</code>, built on vetted primitives (<code>@node-rs/argon2</code> for hashing, Web Crypto for tokens). Email + password, session cookies, in our repo, fully owned. OAuth (GitHub/Google) is an optional add-on, never a hard dependency.</p>
+      <h3>Key encryption at rest</h3>
+      <p>Per-user LLM keys are <b>AES-GCM encrypted</b> with a single server <code>ENCRYPTION_KEY</code> env before they touch the DB. We're holding other people's credentials — this is table stakes, deliberately distinct from the "enterprise nonsense" we skip.</p>
+      <div class="why"><b>Deliberately skipped (local-only):</b> TLS termination, SSRF guards on the fetcher, and rate limiting. These only matter for a public, static-IP deployment. Documented as drop-in additions for "if you ever go public" — not built now.</div>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section id="data">
+    <h2><span class="num">10</span>Data model</h2>
+    <p class="sub">Drizzle schema, portable types only (clean SQLite→Postgres swap).</p>
+    <div class="card">
+<pre><code>users        ( id, email, password_hash, created_at )
+sessions     ( id, user_id, expires_at )
+connections  ( id, user_id, name, base_url, key_encrypted, default_model )
+threads      ( id, user_id, title, created_at )
+messages     ( id, thread_id, role, content,           // role: user | assistant
+               connection_id, created_at )
+sources      ( id, message_id, n, url, title, domain,  // n = citation number
+               favicon, snippet )
+related      ( id, message_id, question )               // suggested follow-ups</code></pre>
+      <p style="color:var(--muted); font-size:14px">Keep to portable types — no SQLite-absent <code>uuid</code>/<code>jsonb</code> — so the Postgres swap is just a driver + connection string change.</p>
+    </div>
+  </section>
+
+  <!-- DEPLOY -->
+  <section id="deploy">
+    <h2><span class="num">11</span>Packaging &amp; deploy</h2>
+    <div class="card">
+      <p>One command on your machine. Two services, file-based DB, localhost.</p>
+<pre><code># docker-compose.yml  (shape)
+services:
+  app:
+    build: .                       # SvelteKit adapter-node
+    ports: ["3000:3000"]
+    environment:
+      - DATABASE_URL=file:/data/app.db     # → postgres://… to upgrade
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - SEARXNG_URL=http://searxng:8080
+    volumes: ["./data:/data"]
+  searxng:
+    image: searxng/searxng
+    environment: [ "SEARXNG_BASE_URL=http://localhost:8080" ]
+
+# run:  docker compose up   →   open http://localhost:3000</code></pre>
+      <p><b>DB upgrade path:</b> flip <code>DATABASE_URL</code> to a Postgres URL and add a <code>postgres</code> service. Same Drizzle schema.</p>
+    </div>
+  </section>
+
+  <!-- SCOPE -->
+  <section id="scope">
+    <h2><span class="num">12</span>MVP scope &amp; later</h2>
+    <div class="scope">
+      <div class="col card">
+        <h3>In the MVP</h3>
+        <ul class="check in">
+          <li>Search → read → cited answer loop (rewrite + fan-out)</li>
+          <li>Animated 4-phase live progress stepper</li>
+          <li>Inline <span class="cite">n</span> citations + source cards</li>
+          <li>Threaded follow-ups + suggested related questions</li>
+          <li>Multi-user auth (own-code) + encrypted BYOK keys</li>
+          <li>Multi-connection setup, auto model list, composer switcher</li>
+          <li>SQLite, docker-compose, localhost</li>
+        </ul>
+      </div>
+      <div class="col card">
+        <h3>Architected-for, deferred</h3>
+        <ul class="check out">
+          <li>Agentic "Deep Research" mode (branch in askLoop)</li>
+          <li>Playwright extraction fallback (behind extract())</li>
+          <li>Postgres (env swap)</li>
+          <li>OAuth social login</li>
+          <li>Shareable answer links</li>
+          <li>Public hardening: TLS, SSRF guard, rate limiting</li>
+          <li>Per-model parameter tuning UI</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Answer Engine — product &amp; architecture spec · drafted 2026-06-26 · self-hosted, BYOK, SvelteKit 5
+  </footer>
+
+</div>
+</body>
+</html>

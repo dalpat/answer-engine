@@ -1,0 +1,12 @@
+# Minimal SearXNG config. The `json` format is required for our /search API call.
+use_default_settings: true
+
+server:
+  # Generate a real one:  openssl rand -hex 32
+  secret_key: 'CHANGE_ME_SEARXNG_SECRET'
+  limiter: false
+
+search:
+  formats:
+    - html
+    - json
