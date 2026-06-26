@@ -12,11 +12,14 @@ import { streamChat, complete, type LlmConnection } from '$lib/server/llm';
 
 const MAX_QUERIES = 3;
 const MAX_SOURCES = 8;
+const MAX_SOURCES_DEEP = 14;
 
 export interface AskInput {
 	query: string;
 	/** Prior Q&A summaries fed back on follow-ups (bounded token cost). */
 	history?: string[];
+	/** Deep Research: run an extra gap-filling search round before synthesis. */
+	deep?: boolean;
 }
 
 export async function* askLoop(input: AskInput, conn: LlmConnection): AsyncGenerator<AskEvent> {
@@ -33,9 +36,30 @@ export async function* askLoop(input: AskInput, conn: LlmConnection): AsyncGener
 		yield { type: 'status', phase: 'reading', count: links.length };
 
 		// 4 — Extract page content concurrently.
-		const pages = (await Promise.all(links.map((l) => extract(l.url)))).filter(
+		let pages = (await Promise.all(links.map((l) => extract(l.url)))).filter(
 			(p): p is NonNullable<typeof p> => p !== null
 		);
+
+		// 4b — Deep Research: one extra gap-filling round of search + extract.
+		if (input.deep) {
+			const gaps = await deepQueries(input, pages, conn).catch(() => [] as string[]);
+			if (gaps.length) {
+				yield { type: 'status', phase: 'searching', queries: gaps };
+				const seen = new Set(pages.map((p) => p.url));
+				const moreLists = await Promise.all(
+					gaps.map((q) => search(q).catch(() => [] as SearchResult[]))
+				);
+				const moreLinks = dedupe(moreLists)
+					.filter((l) => !seen.has(l.url))
+					.slice(0, MAX_SOURCES_DEEP - pages.length);
+				yield { type: 'status', phase: 'reading', count: pages.length + moreLinks.length };
+				const morePages = (await Promise.all(moreLinks.map((l) => extract(l.url)))).filter(
+					(p): p is NonNullable<typeof p> => p !== null
+				);
+				pages = [...pages, ...morePages].slice(0, MAX_SOURCES_DEEP);
+			}
+		}
+
 		const cards: SourceCard[] = pages.map((p, i) => ({
 			n: i + 1,
 			url: p.url,
@@ -80,6 +104,29 @@ async function rewrite(input: AskInput, conn: LlmConnection): Promise<string[]> 
 		.filter(Boolean)
 		.slice(0, MAX_QUERIES);
 	return queries.length ? queries : [input.query];
+}
+
+async function deepQueries(
+	input: AskInput,
+	pages: { title: string; text: string }[],
+	conn: LlmConnection
+): Promise<string[]> {
+	const haveSnippets = pages.map((p) => `- ${p.title}: ${p.text.slice(0, 200)}`).join('\n');
+	const out = await complete(conn, [
+		{
+			role: 'system',
+			content:
+				`We already searched and found the sources below. Suggest up to ${MAX_QUERIES} ADDITIONAL ` +
+				`web-search queries that would fill gaps or add depth not covered yet. ` +
+				`Return ONLY the queries, one per line, no numbering.`
+		},
+		{ role: 'user', content: `Question: ${input.query}\n\nAlready found:\n${haveSnippets}` }
+	]);
+	return out
+		.split('\n')
+		.map((q) => q.replace(/^[-*\d.\s]+/, '').trim())
+		.filter(Boolean)
+		.slice(0, MAX_QUERIES);
 }
 
 function buildPrompt(input: AskInput, pages: { text: string }[]) {

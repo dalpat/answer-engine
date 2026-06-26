@@ -1,9 +1,10 @@
 /**
  * Extraction seam — turn a URL into clean readable text.
- * Today: readability-first (lightweight HTTP fetch + heuristic extraction).
- * Later: drop in a Playwright fallback HERE when text is too short — the
- * call sites never change. See docs/spec.html §03/§04.
+ * Today: readability-first (lightweight HTTP fetch + heuristic extraction),
+ * with an optional Playwright fallback (EXTRACT_BROWSER=1) when text is too
+ * short — the call sites never change. See docs/spec.html §03/§04.
  */
+import { env } from '$env/dynamic/private';
 
 export interface ExtractedPage {
 	url: string;
@@ -19,10 +20,10 @@ const MIN_USEFUL_CHARS = 200;
 export async function extract(url: string): Promise<ExtractedPage | null> {
 	try {
 		const html = await fetchHtml(url);
-		const text = readability(html);
+		let text = readability(html);
 		if (text.length < MIN_USEFUL_CHARS) {
-			// TODO(later): Playwright fallback render for JS-heavy pages.
-			return null;
+			text = await browserFallback(url);
+			if (text.length < MIN_USEFUL_CHARS) return null;
 		}
 		const domain = new URL(url).hostname.replace(/^www\./, '');
 		return {
@@ -34,6 +35,18 @@ export async function extract(url: string): Promise<ExtractedPage | null> {
 		};
 	} catch {
 		return null;
+	}
+}
+
+/** Headless-browser render, only when explicitly enabled. Returns '' otherwise. */
+async function browserFallback(url: string): Promise<string> {
+	if (env.EXTRACT_BROWSER !== '1') return '';
+	try {
+		const { renderAndExtract } = await import('./browser');
+		const rendered = await renderAndExtract(url);
+		return rendered.replace(/\s+/g, ' ').trim().slice(0, 8000);
+	} catch {
+		return '';
 	}
 }
 

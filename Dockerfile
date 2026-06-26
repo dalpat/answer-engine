@@ -11,6 +11,8 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/build ./build
 COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/drizzle ./drizzle
 COPY package.json ./
 EXPOSE 3000
+# Migrations auto-apply on boot (see src/hooks.server.ts → runMigrations()).
 CMD ["node", "build"]

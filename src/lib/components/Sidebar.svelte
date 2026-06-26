@@ -4,18 +4,16 @@
 	import Icon from './Icon.svelte';
 	import Menu from './Menu.svelte';
 	import { ui, toggleSidebar } from '$lib/stores/ui.svelte';
-	import { session, selectThread, removeThread, newThread } from '$lib/stores/session.svelte';
+	import { session, removeThread } from '$lib/stores/session.svelte';
 
 	const path = $derived(page.url.pathname);
 	const email = $derived((page.data.user?.email as string | undefined) ?? 'Account');
 
 	function onNew() {
-		newThread();
 		goto('/');
 	}
 	function onSelect(id: string) {
-		selectThread(id);
-		goto('/');
+		goto(`/thread/${id}`);
 	}
 </script>
 
@@ -50,7 +48,7 @@
 			<p class="empty">No conversations yet</p>
 		{:else}
 			{#each session.threads as t (t.id)}
-				<div class="hist-item" class:active={session.activeId === t.id}>
+				<div class="hist-item" class:active={path === `/thread/${t.id}`}>
 					<button class="hist-main" onclick={() => onSelect(t.id)} title={t.title}>
 						<Icon name="message" size={15} />
 						<span class="hist-title">{t.title}</span>
@@ -64,9 +62,11 @@
 						{#snippet children(close)}
 							<button
 								class="menu-item danger"
-								onclick={() => {
-									removeThread(t.id);
+								onclick={async () => {
 									close();
+									const wasActive = path === `/thread/${t.id}`;
+									await removeThread(t.id);
+									if (wasActive) goto('/');
 								}}
 							>
 								<Icon name="trash" size={15} /> Delete

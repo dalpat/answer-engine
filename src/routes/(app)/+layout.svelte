@@ -1,7 +1,12 @@
 <script lang="ts">
 	import Sidebar from '$lib/components/Sidebar.svelte';
+	import { session, loadThreads } from '$lib/stores/session.svelte';
 
 	let { children } = $props();
+
+	$effect(() => {
+		if (!session.loaded) loadThreads();
+	});
 </script>
 
 <div class="shell">
