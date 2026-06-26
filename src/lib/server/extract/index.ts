@@ -16,9 +16,17 @@ export interface ExtractedPage {
 
 const FETCH_TIMEOUT_MS = 8000;
 const MIN_USEFUL_CHARS = 200;
+const MAX_CHARS = 4000;
 
 export async function extract(url: string): Promise<ExtractedPage | null> {
 	try {
+		// Wikipedia: use the API for a clean plain-text summary instead of
+		// scraping messy article HTML (infoboxes, nav, references).
+		if (/^https?:\/\/[a-z]+\.wikipedia\.org\/wiki\//.test(url)) {
+			const wiki = await wikipediaExtract(url);
+			if (wiki) return wiki;
+		}
+
 		const html = await fetchHtml(url);
 		let text = readability(html);
 		if (text.length < MIN_USEFUL_CHARS) {
@@ -31,11 +39,42 @@ export async function extract(url: string): Promise<ExtractedPage | null> {
 			title: pickTitle(html) || domain,
 			domain,
 			favicon: `https://${domain}/favicon.ico`,
-			text: text.slice(0, 8000)
+			text: text.slice(0, MAX_CHARS)
 		};
 	} catch {
 		return null;
 	}
+}
+
+/** Clean Wikipedia summary via the MediaWiki extracts API. */
+async function wikipediaExtract(url: string): Promise<ExtractedPage | null> {
+	const title = decodeURIComponent(url.split('/wiki/')[1] ?? '').split('#')[0];
+	if (!title) return null;
+	const api = new URL('https://en.wikipedia.org/w/api.php');
+	api.searchParams.set('action', 'query');
+	api.searchParams.set('prop', 'extracts');
+	api.searchParams.set('exintro', '1');
+	api.searchParams.set('explaintext', '1');
+	api.searchParams.set('redirects', '1');
+	api.searchParams.set('format', 'json');
+	api.searchParams.set('titles', title);
+	api.searchParams.set('origin', '*');
+
+	const res = await fetch(api, { headers: { 'User-Agent': 'AnswerEngine/0.1 (+self-hosted)' } });
+	if (!res.ok) return null;
+	const data = (await res.json()) as {
+		query?: { pages?: Record<string, { title?: string; extract?: string }> };
+	};
+	const page = Object.values(data.query?.pages ?? {})[0];
+	const text = (page?.extract ?? '').replace(/\s+/g, ' ').trim();
+	if (text.length < MIN_USEFUL_CHARS) return null;
+	return {
+		url,
+		title: page?.title ?? title.replace(/_/g, ' '),
+		domain: 'en.wikipedia.org',
+		favicon: 'https://en.wikipedia.org/favicon.ico',
+		text: text.slice(0, MAX_CHARS)
+	};
 }
 
 /** Headless-browser render, only when explicitly enabled. Returns '' otherwise. */

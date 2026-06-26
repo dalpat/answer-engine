@@ -11,8 +11,8 @@ import { extract } from '$lib/server/extract';
 import { streamChat, complete, type LlmConnection, type ChatMessage } from '$lib/server/llm';
 
 const MAX_QUERIES = 3;
-const MAX_SOURCES = 8;
-const MAX_SOURCES_DEEP = 14;
+const MAX_SOURCES = 6;
+const MAX_SOURCES_DEEP = 10;
 
 export interface AskInput {
 	query: string;
@@ -25,9 +25,14 @@ export interface AskInput {
 export async function* askLoop(input: AskInput, conn: LlmConnection): AsyncGenerator<AskEvent> {
 	const started = Date.now();
 	try {
-		// 1 — Understand: rewrite the question into focused search queries.
+		// 1 — Understand: always search the literal question first (robust to weak
+		// models), plus up to a couple of model-suggested variants.
 		yield { type: 'status', phase: 'understanding' };
-		const queries = await rewrite(input, conn);
+		const rewritten = await rewrite(input, conn).catch(() => [] as string[]);
+		const queries = [
+			input.query,
+			...rewritten.filter((q) => q.toLowerCase() !== input.query.toLowerCase())
+		].slice(0, MAX_QUERIES);
 		yield { type: 'status', phase: 'searching', queries };
 
 		// 2,3 — Search (parallel fan-out) + dedupe. Log backend failures (don't swallow silently).
@@ -136,7 +141,7 @@ async function deepQueries(
 		.slice(0, MAX_QUERIES);
 }
 
-function buildPrompt(input: AskInput, pages: { text: string }[]) {
+function buildPrompt(input: AskInput, pages: { title: string; text: string }[]) {
 	const history = input.history?.length ? `Prior context:\n${input.history.join('\n')}\n\n` : '';
 
 	// No sources (search backend down / returned nothing): answer from knowledge,
@@ -154,15 +159,19 @@ function buildPrompt(input: AskInput, pages: { text: string }[]) {
 		];
 	}
 
-	const sources = pages.map((p, i) => `[${i + 1}] ${p.text}`).join('\n\n');
+	const sources = pages.map((p, i) => `[${i + 1}] ${p.title}\n${p.text}`).join('\n\n');
 	return [
 		{
 			role: 'system' as const,
 			content:
-				'You are a research assistant. Answer using ONLY the numbered sources. ' +
+				'You are a research assistant. Directly answer the question by SYNTHESIZING the numbered ' +
+				'sources in your own words — do NOT copy source text verbatim or dump article content. ' +
 				'Cite claims inline with [n] matching the source numbers. Be concise and well-structured (markdown).'
 		},
-		{ role: 'user' as const, content: `${history}Question: ${input.query}\n\nSources:\n${sources}` }
+		{
+			role: 'user' as const,
+			content: `${history}Question: ${input.query}\n\nSources:\n${sources}`
+		}
 	];
 }
 
