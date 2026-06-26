@@ -46,6 +46,7 @@
 
 	let streaming = $state(false);
 	let deep = $state(false);
+	let search = $state(true);
 	let bottom = $state<HTMLElement>();
 
 	// Clear the live overlay when navigating to a different thread.
@@ -100,7 +101,8 @@
 					threadId: data.thread.id,
 					connectionId: conns.active?.connectionId,
 					model: conns.active?.model,
-					deep
+					deep,
+					search
 				},
 				(ev) => applyTo(i, ev)
 			);
@@ -118,6 +120,7 @@
 		const p = takePending(data.thread.id);
 		if (p) {
 			deep = p.deep;
+			search = p.search;
 			ask(p.question);
 		}
 	});
@@ -132,7 +135,7 @@
 	</main>
 
 	<div class="dock">
-		<Composer onsubmit={ask} bind:deep disabled={streaming} placeholder="Ask a follow-up…" />
+		<Composer onsubmit={ask} bind:deep bind:search disabled={streaming} placeholder="Ask a follow-up…" />
 	</div>
 </div>
 

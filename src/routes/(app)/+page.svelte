@@ -5,6 +5,7 @@
 	import { createThread, setPending } from '$lib/stores/session.svelte';
 
 	let deep = $state(false);
+	let search = $state(true);
 	let creating = $state(false);
 
 	$effect(() => {
@@ -16,7 +17,7 @@
 		creating = true;
 		try {
 			const t = await createThread(q);
-			setPending(t.id, q, deep);
+			setPending(t.id, q, deep, search);
 			await goto(`/thread/${t.id}`);
 		} finally {
 			creating = false;
@@ -31,7 +32,7 @@
 		<p class="sub">Searches the web, reads the sources, answers with citations.</p>
 	</div>
 
-	<Composer onsubmit={start} bind:deep disabled={creating} />
+	<Composer onsubmit={start} bind:deep bind:search disabled={creating} />
 
 	<div class="hints">
 		{#each ['Best mirrorless cameras in 2026', 'How does SearXNG work?', 'Explain AES-GCM simply'] as h (h)}

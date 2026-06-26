@@ -73,6 +73,10 @@
 		</div>
 	{/if}
 
+	{#if turn.running && !turn.answer && turn.phase === null}
+		<div class="thinking" aria-label="Thinking"><span></span><span></span><span></span></div>
+	{/if}
+
 	{#if turn.answer}
 		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 		<article class="prose">{@html answerHtml}</article>
@@ -296,5 +300,33 @@
 		border-radius: 12px;
 		padding: 12px 16px;
 		margin-bottom: 18px;
+	}
+	.thinking {
+		display: flex;
+		gap: 5px;
+		padding: 4px 0;
+	}
+	.thinking span {
+		width: 7px;
+		height: 7px;
+		border-radius: 50%;
+		background: var(--muted);
+		animation: blink 1.2s infinite ease-in-out both;
+	}
+	.thinking span:nth-child(2) {
+		animation-delay: 0.2s;
+	}
+	.thinking span:nth-child(3) {
+		animation-delay: 0.4s;
+	}
+	@keyframes blink {
+		0%,
+		80%,
+		100% {
+			opacity: 0.25;
+		}
+		40% {
+			opacity: 1;
+		}
 	}
 </style>

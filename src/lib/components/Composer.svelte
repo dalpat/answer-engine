@@ -7,15 +7,18 @@
 		onsubmit,
 		disabled = false,
 		deep = $bindable(false),
+		search = $bindable(true),
 		placeholder = 'Ask anything…'
 	}: {
 		onsubmit: (q: string) => void;
 		disabled?: boolean;
 		deep?: boolean;
+		search?: boolean;
 		placeholder?: string;
 	} = $props();
 
 	let query = $state('');
+	const ph = $derived(search ? placeholder : 'Send a message…');
 
 	function submit() {
 		const q = query.trim();
@@ -32,7 +35,7 @@
 </script>
 
 <div class="composer">
-	<textarea bind:value={query} onkeydown={onKeydown} {placeholder} rows="1" {disabled}></textarea>
+	<textarea bind:value={query} onkeydown={onKeydown} placeholder={ph} rows="1" {disabled}></textarea>
 	<div class="tools">
 		<div class="left">
 			<Menu width={230}>
@@ -74,14 +77,26 @@
 			</Menu>
 
 			<button
-				class="deep"
-				class:on={deep}
+				class="toggle"
+				class:on={search}
 				type="button"
-				title="Deep Research — extra gap-filling search round"
-				onclick={() => (deep = !deep)}
+				title={search ? 'Web search on — answer engine' : 'Web search off — plain chat'}
+				onclick={() => (search = !search)}
 			>
-				<Icon name="compass" size={14} /> Deep
+				<Icon name="search" size={14} /> Search
 			</button>
+
+			{#if search}
+				<button
+					class="toggle"
+					class:on={deep}
+					type="button"
+					title="Deep Research — extra gap-filling search round"
+					onclick={() => (deep = !deep)}
+				>
+					<Icon name="compass" size={14} /> Deep
+				</button>
+			{/if}
 		</div>
 
 		<button class="send" onclick={submit} disabled={disabled || !query.trim()} aria-label="Send">
@@ -149,7 +164,7 @@
 		display: inline-flex;
 		opacity: 0.7;
 	}
-	.deep {
+	.toggle {
 		display: inline-flex;
 		align-items: center;
 		gap: 5px;
@@ -161,11 +176,11 @@
 		font-size: 13px;
 		cursor: pointer;
 	}
-	.deep:hover {
+	.toggle:hover {
 		color: var(--ink);
 		border-color: var(--line-strong);
 	}
-	.deep.on {
+	.toggle.on {
 		background: var(--active);
 		border-color: var(--accent-line);
 		color: var(--accent);

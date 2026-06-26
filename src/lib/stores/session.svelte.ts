@@ -41,23 +41,28 @@ export async function removeThread(id: string) {
 }
 
 /** Handoff: the home composer stashes the first question; the thread page takes it. */
-export const pending = $state<{ threadId: string | null; question: string | null; deep: boolean }>({
-	threadId: null,
-	question: null,
-	deep: false
-});
+export const pending = $state<{
+	threadId: string | null;
+	question: string | null;
+	deep: boolean;
+	search: boolean;
+}>({ threadId: null, question: null, deep: false, search: true });
 
-export function setPending(threadId: string, question: string, deep: boolean) {
+export function setPending(threadId: string, question: string, deep: boolean, search: boolean) {
 	pending.threadId = threadId;
 	pending.question = question;
 	pending.deep = deep;
+	pending.search = search;
 }
 
-export function takePending(threadId: string): { question: string; deep: boolean } | null {
+export function takePending(
+	threadId: string
+): { question: string; deep: boolean; search: boolean } | null {
 	if (pending.threadId !== threadId || pending.question === null) return null;
-	const result = { question: pending.question, deep: pending.deep };
+	const result = { question: pending.question, deep: pending.deep, search: pending.search };
 	pending.threadId = null;
 	pending.question = null;
 	pending.deep = false;
+	pending.search = true;
 	return result;
 }

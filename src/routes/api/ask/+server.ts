@@ -8,7 +8,7 @@
  * without one it runs the demo generator.
  */
 import type { RequestHandler } from './$types';
-import { askLoop, demoAsk } from '$lib/server/ask';
+import { askLoop, chatLoop, demoAsk, demoChat } from '$lib/server/ask';
 import { resolveConnection } from '$lib/server/connections';
 import { getThread, addUserMessage, addAssistantMessage, buildHistory } from '$lib/server/threads';
 import { encodeEvent, type AskEvent, type SourceCard } from '$lib/events';
@@ -22,6 +22,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		connectionId?: string;
 		model?: string;
 		deep?: boolean;
+		search?: boolean;
 	};
 	const query = body.query?.trim();
 	if (!query) return new Response('query required', { status: 400 });
@@ -30,8 +31,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const thread = await getThread(locals.user.id, body.threadId);
 	if (!thread) return new Response('thread not found', { status: 404 });
 
+	const useSearch = body.search !== false; // default: answer-engine mode
+
 	// Prior context (before this turn), then record the new question.
 	const history = await buildHistory(thread.id);
+	const priorMessages = thread.messages.map((m) => ({ role: m.role, content: m.content }));
 	await addUserMessage(thread.id, query);
 
 	let events: AsyncGenerator<AskEvent>;
@@ -42,12 +46,19 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const model = body.model || conn.defaultModel;
 		if (!model) return new Response('no model selected', { status: 400 });
 		connectionId = body.connectionId;
-		events = askLoop(
-			{ query, history, deep: body.deep },
-			{ baseUrl: conn.baseUrl, apiKey: conn.apiKey, model }
-		);
+		const llm = { baseUrl: conn.baseUrl, apiKey: conn.apiKey, model };
+		events = useSearch
+			? askLoop({ query, history, deep: body.deep }, llm)
+			: chatLoop(
+					[
+						{ role: 'system', content: 'You are a helpful assistant.' },
+						...priorMessages,
+						{ role: 'user', content: query }
+					],
+					llm
+				);
 	} else {
-		events = demoAsk(query);
+		events = useSearch ? demoAsk(query) : demoChat(query);
 	}
 
 	const collected = { answer: '', sources: [] as SourceCard[], related: [] as string[] };

@@ -8,7 +8,7 @@
 import type { AskEvent, SourceCard } from '$lib/events';
 import { search, dedupe, type SearchResult } from '$lib/server/search';
 import { extract } from '$lib/server/extract';
-import { streamChat, complete, type LlmConnection } from '$lib/server/llm';
+import { streamChat, complete, type LlmConnection, type ChatMessage } from '$lib/server/llm';
 
 const MAX_QUERIES = 3;
 const MAX_SOURCES = 8;
@@ -156,6 +156,37 @@ async function relatedQuestions(query: string, answer: string, conn: LlmConnecti
 		.map((q) => q.replace(/^[-*\d.\s]+/, '').trim())
 		.filter(Boolean)
 		.slice(0, 3);
+}
+
+/**
+ * Plain chat — web search off. Streams a chat completion over the full
+ * conversation, no search/sources/related. See docs/spec.html §01 (chat sub-mode).
+ */
+export async function* chatLoop(
+	messages: ChatMessage[],
+	conn: LlmConnection
+): AsyncGenerator<AskEvent> {
+	const started = Date.now();
+	try {
+		for await (const tok of streamChat(conn, messages)) {
+			yield { type: 'token', text: tok };
+		}
+		yield { type: 'done', elapsedMs: Date.now() - started };
+	} catch (err) {
+		yield { type: 'error', message: err instanceof Error ? err.message : 'chat failed' };
+	}
+}
+
+/** Demo chat (no connection configured). */
+export async function* demoChat(query: string): AsyncGenerator<AskEvent> {
+	const started = Date.now();
+	const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+	const msg = `You said: "${query}". This is **chat mode** — web search is off, so I reply directly. Configure a model in Settings to chat for real.`;
+	for (const word of msg.split(' ')) {
+		yield { type: 'token', text: word + ' ' };
+		await sleep(35);
+	}
+	yield { type: 'done', elapsedMs: Date.now() - started };
 }
 
 /**

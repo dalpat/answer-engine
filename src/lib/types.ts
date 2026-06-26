@@ -17,7 +17,7 @@ export interface Turn {
 export function emptyTurn(question: string): Turn {
 	return {
 		question,
-		phase: 'understanding',
+		phase: null, // search mode sets this via status events; chat leaves it null (no stepper)
 		queries: [],
 		sources: [],
 		answer: '',
