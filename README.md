@@ -11,7 +11,7 @@ beautiful live-progress UX. Multi-user, BYOK, with persistent threaded conversat
 | Concern    | Choice                                          |
 | ---------- | ----------------------------------------------- |
 | Framework  | SvelteKit (Svelte 5 runes) + `adapter-node`     |
-| Search     | Self-hosted SearXNG                             |
+| Search     | SearXNG (default) or keyless DuckDuckGo          |
 | Extraction | Readability-first (+ optional Playwright)       |
 | LLM        | BYOK — any OpenAI-compatible endpoint           |
 | DB         | Drizzle ORM · libSQL/SQLite (remote-swappable)  |
@@ -31,14 +31,34 @@ endpoint (local vLLM/Ollama, Groq, Together, …). Before configuring a model, t
 in **demo mode** so you can see the live-progress stepper, source cards, and streaming
 answer immediately. (Real answers need a running SearXNG — use the compose stack below.)
 
-## Run (self-hosted)
+## Run without Docker (just Node)
+
+The app is a plain Node server — no Docker required. For search, the keyless
+`duckduckgo` backend needs no extra service:
+
+```sh
+cp .env.example .env          # set ENCRYPTION_KEY, SESSION_SECRET, SEARCH_BACKEND=duckduckgo
+bun install
+bun run build
+ORIGIN=http://localhost:3000 PORT=3000 bun run start   # → http://localhost:3000
+```
+
+Then register, add your OpenAI-compatible model in **Settings**, and ask. The schema is
+created automatically on first boot (Drizzle migrations) — no manual step. Set `ORIGIN`
+to the URL you actually hit (CSRF). `duckduckgo` may rate-limit on some networks; for the
+most robust search, run **SearXNG** (below) and set `SEARCH_BACKEND=searxng`.
+
+### With SearXNG (no Docker)
+
+Run a SearXNG instance however you like (system package, a Python venv from the
+[SearXNG repo](https://github.com/searxng/searxng), or a host you trust), make sure its
+JSON format is enabled, then point `SEARXNG_URL` at it.
+
+## Run with Docker
 
 ```sh
 docker compose up             # app + SearXNG → http://localhost:3000
 ```
-
-Set `ORIGIN` to the URL users actually hit (CSRF). The schema is created automatically on
-first boot via Drizzle migrations — no manual step.
 
 ## What works
 
