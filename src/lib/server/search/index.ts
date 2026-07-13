@@ -3,12 +3,14 @@
  *   'searxng'    (default) self-hosted metasearch — most complete, needs a running instance
  *   'wikipedia'  keyless, reliable, no service — Wikipedia-only
  *   'duckduckgo' keyless general web — may be rate-limited on some networks
+ *   'tavily'     API-based web search for LLMs — needs TAVILY_API_KEY
  * Isolates the backend so swapping is config, not a rewrite. See docs/spec.html §03/§05.
  */
 import { env } from '$env/dynamic/private';
 import { searxngSearch } from './searxng';
 import { ddgSearch } from './duckduckgo';
 import { wikipediaSearch } from './wikipedia';
+import { tavilySearch } from './tavily';
 
 export interface SearchResult {
 	url: string;
@@ -23,6 +25,8 @@ export function search(query: string): Promise<SearchResult[]> {
 			return wikipediaSearch(query);
 		case 'duckduckgo':
 			return ddgSearch(query);
+		case 'tavily':
+			return tavilySearch(query);
 		default:
 			return searxngSearch(query);
 	}
