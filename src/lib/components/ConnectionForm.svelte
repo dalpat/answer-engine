@@ -55,10 +55,15 @@
 	<label>
 		<span class="field-label">Base URL</span>
 		<input class="field" bind:value={baseUrl} placeholder="https://api.groq.com/openai" />
+		<small class="hint"
+			>Just the origin — no <code>/v1</code>, it's added for you. A model on this machine is
+			<code>http://localhost:PORT</code> (e.g. llama.cpp / Ollama).</small
+		>
 	</label>
 	<label>
 		<span class="field-label">API key</span>
 		<input class="field" type="password" bind:value={apiKey} placeholder="sk-…" />
+		<small class="hint">Local servers ignore this, but it can't be blank — type anything.</small>
 	</label>
 
 	{#if models.length === 0}
@@ -114,5 +119,18 @@
 	select.field {
 		appearance: none;
 		cursor: pointer;
+	}
+	.hint {
+		display: block;
+		margin-top: 5px;
+		color: var(--muted);
+		font-size: 12.5px;
+		line-height: 1.45;
+	}
+	.hint code {
+		font-size: 0.95em;
+		padding: 1px 4px;
+		border-radius: 4px;
+		background: var(--line);
 	}
 </style>
