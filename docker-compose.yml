@@ -3,23 +3,29 @@
 services:
   app:
     build: .
-    ports:
-      - '3000:3000'
+    # Share the host's network namespace so the app reaches models you run on the
+    # host (llama.cpp, Ollama, …) at plain http://localhost:PORT over loopback.
+    # With bridge networking the container's `localhost` is the container, and on
+    # this host ufw blocks the bridge→host path — loopback sidesteps both. The app
+    # serves on the host's :3000 directly (the `ports` mapping isn't used here).
+    network_mode: host
     environment:
       - DATABASE_URL=file:/data/app.db # swap to postgres://… later
-      - SEARXNG_URL=http://searxng:8080
+      - SEARXNG_URL=http://localhost:8888 # only used if SEARCH_BACKEND=searxng
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - SESSION_SECRET=${SESSION_SECRET}
       - ORIGIN=${ORIGIN:-http://localhost:3000} # must match the URL users hit (CSRF)
     volumes:
       - ./data:/data
-    depends_on:
-      - searxng
 
   searxng:
     image: searxng/searxng:latest
+    # Published on the host so the host-networked app can reach it at
+    # localhost:8888 (8080 is taken by a host-run model). Only used when
+    # SEARCH_BACKEND=searxng — the default 'wikipedia' backend needs neither.
+    ports:
+      - '8888:8080'
     environment:
-      - SEARXNG_BASE_URL=http://localhost:8080/
+      - SEARXNG_BASE_URL=http://localhost:8888/
     volumes:
       - ./searxng:/etc/searxng
-    # Not published to the host by default — only the app talks to it.
