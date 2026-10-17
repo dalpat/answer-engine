@@ -4,6 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
+		"test": "bun test",
 		"dev": "vite dev",
 		"build": "vite build",
 		"start": "node build",
@@ -19,6 +20,7 @@
 		"@sveltejs/adapter-node": "^5.5.7",
 		"@sveltejs/kit": "^2.63.0",
 		"@sveltejs/vite-plugin-svelte": "^7.1.2",
+		"@types/bun": "^1.4.3",
 		"drizzle-kit": "^0.31.10",
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
@@ -27,6 +29,7 @@
 	},
 	"dependencies": {
 		"@libsql/client": "^0.17.4",
+		"@modelcontextprotocol/sdk": "^1.32.1",
 		"@node-rs/argon2": "^2.0.2",
 		"drizzle-orm": "^0.45.2",
 		"marked": "^18.0.5"

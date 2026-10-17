@@ -52,6 +52,11 @@ generate them). Then pick a search backend — `SEARCH_BACKEND` can be:
   you run. The best results, but you have to run SearXNG and point `SEARXNG_URL` at it.
 - `duckduckgo` — keyless general web search, but DDG rate-limits/challenges a lot of
   networks, so it's hit or miss.
+- `parallel` — general web search through [Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp).
+  Set `SEARCH_BACKEND=parallel` for hosted search in Fast mode, with no account, API key,
+  or extra service to run. Queries are sent to Parallel; the app still reads the result
+  pages and uses your configured model to write the answer. Anonymous usage has rate
+  limits, and a failed search is handled like any other backend failure.
 
 Then:
 
@@ -67,6 +72,10 @@ and ask something.
 
 > If you change `.env`, restart `bun run dev` — env is only read at startup. Code changes
 > hot-reload fine.
+
+For Parallel in Docker, also add `SEARCH_BACKEND=parallel` to the app's
+`environment` list in `docker-compose.yml`. Compose's `.env` file alone does not
+pass that setting into the container.
 
 ### Or with Docker
 
@@ -91,7 +100,7 @@ SvelteKit 5 with the runes syntax (deliberately not Next), compiled to a plain N
 with `adapter-node` — the whole thing is one process. Data is Drizzle + SQLite (libSQL),
 which swaps to a remote libSQL/Turso URL with no code change. Auth is hand-rolled sessions
 following the Lucia pattern (argon2 hashing, hashed session tokens) rather than a library.
-Search sits behind one interface so the three backends are interchangeable, and page
+Search sits behind one interface so the backends are interchangeable, and page
 extraction is readability-first with an optional headless-browser fallback.
 
 The answer pipeline is the interesting part: rewrite the question into search queries →
